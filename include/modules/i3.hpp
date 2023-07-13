@@ -1,12 +1,15 @@
 #pragma once
 
 #include <i3ipc++/ipc.hpp>
+#include <memory>
+#include <vector>
 
 #include "components/config.hpp"
 #include "modules/meta/event_module.hpp"
 #include "modules/meta/types.hpp"
 #include "utils/i3.hpp"
 #include "utils/io.hpp"
+#include "x11/connection.hpp"
 
 POLYBAR_NS
 
@@ -64,6 +67,7 @@ namespace modules {
     void action_prev();
 
     void focus_direction(bool next);
+    vector<shared_ptr<i3_util::workspace_t>> get_static_workspaces() const;
 
    private:
     static string make_workspace_command(const string& workspace);
@@ -78,6 +82,7 @@ namespace modules {
 
     map<state, label_t> m_statelabels;
     vector<unique_ptr<workspace>> m_workspaces;
+    vector<shared_ptr<i3_util::workspace_t>> m_static_workspaces;
     iconset_t m_icons;
 
     label_t m_modelabel;
@@ -97,6 +102,7 @@ namespace modules {
     bool m_show_urgent{false};
     bool m_strip_wsnumbers{false};
     bool m_fuzzy_match{false};
+    bool m_show_assigned_workspaces{false};
 
     unique_ptr<i3_util::connection_t> m_ipc;
   };

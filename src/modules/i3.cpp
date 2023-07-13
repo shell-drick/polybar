@@ -1,13 +1,19 @@
 #include "modules/i3.hpp"
 
 #include <sys/socket.h>
+#include <regex.h>
 
 #include "drawtypes/iconset.hpp"
 #include "drawtypes/label.hpp"
 #include "modules/meta/base.inl"
 #include "utils/file.hpp"
+#include "utils/i3.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <i3ipc++/ipc-util.hpp>
+#include <memory>
+#include <regex>
 
 POLYBAR_NS
 
@@ -43,6 +49,17 @@ namespace modules {
     m_show_urgent = m_conf.get(name(), "show-urgent", m_show_urgent);
     m_strip_wsnumbers = m_conf.get(name(), "strip-wsnumbers", m_strip_wsnumbers);
     m_fuzzy_match = m_conf.get(name(), "fuzzy-match", m_fuzzy_match);
+    m_show_assigned_workspaces = m_conf.get(name(), "show-assigned-workspaces", m_show_assigned_workspaces);
+
+    m_log.notice("%s m_show_assigned_workspaces: %d", name(), m_show_assigned_workspaces);
+    // if static workspaces enabled, populate them now
+    if (m_show_assigned_workspaces) {
+      m_log.notice("%s: enabling static workspaces", name());
+      m_static_workspaces = get_static_workspaces();
+      for (auto w : m_static_workspaces) {
+        m_log.info("found static workspace %s", w->name);
+      }
+    }
 
     m_conf.warn_deprecated(name(), "wsname-maxlen", "%name:min:max%");
 
@@ -148,6 +165,16 @@ namespace modules {
         workspaces = i3_util::workspaces(ipc, m_bar.monitor->name, m_show_urgent);
       } else {
         workspaces = i3_util::workspaces(ipc);
+      }
+
+      if (m_show_assigned_workspaces) {
+        for (auto w : m_static_workspaces) {
+          if (auto it = std::find_if(workspaces.begin(), workspaces.end(),
+                  [w](shared_ptr<i3_util::workspace_t> s) { return s->name == w->name; });
+              it == workspaces.end() && m_bar.monitor->name == w->output && m_pinworkspaces) {
+            workspaces.insert(workspaces.begin() + w->num, w);
+          }
+        }
       }
 
       if (m_indexsort) {
@@ -274,6 +301,32 @@ namespace modules {
       m_log.info("%s: Sending workspace prev_on_output command to ipc handler", name());
       conn.send_command("workspace prev_on_output");
     }
+  }
+
+  vector<std::shared_ptr<i3_util::workspace_t>> i3_module::get_static_workspaces() const {
+    i3_util::connection_t ipc;
+
+    vector<string> config = ipc.get_config();
+    vector<shared_ptr<i3_util::workspace_t>> workspaces;
+    std::regex pattern = std::regex("workspace\\s(.+)\\soutput\\s(.+)");
+
+    std::smatch match;
+    for (const auto &line : config) {
+      if (std::regex_search(line, match, pattern)) {
+        std::shared_ptr<i3_util::workspace_t> w(new i3_util::workspace_t);
+        w->num = workspaces.size();
+        w->name = match.str(1);
+        w->visible = false;
+        w->focused = false;
+        w->urgent = false;
+        w->rect = (i3ipc::rect_t){0, 0, 0, 0};
+        w->output = match.str(2);
+        workspaces.push_back(w);
+      }
+    }
+
+    return workspaces;
+
   }
 
   string i3_module::make_workspace_command(const string& workspace) {
