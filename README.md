@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-A fast and easy-to-use tool for creating status bars.
+A fast and easy-to-use tool for creating status bars. (i3 feature fork)
 </p>
 
 <p align="center">
